@@ -33,10 +33,12 @@ class ClosableSSEClient(SSEClient):
 
 class RemoteThread(threading.Thread):
 
-    def __init__(self, parent, URL, function):
+    def __init__(self, parent, URL, function, me, other):
         self.function = function
         self.URL = URL
         self.parent = parent
+        self.me = me
+        self.other = other
         super(RemoteThread, self).__init__()
 
     def run(self):
@@ -48,7 +50,7 @@ class RemoteThread(threading.Thread):
                     continue
                 msg_event = msg.event
                 # TODO: update parent cache here
-                self.function((msg.event, msg_data))
+                self.function((msg.event, msg_data, self.me, self.other))
         except socket.error:
             pass    # this can happen when we close the stream
         except KeyboardInterrupt:
@@ -67,10 +69,9 @@ def firebaseURL(URL):
             if '/' == URL[-1]:
                 URL = URL[:-1]
             URL = 'https://' + \
-                URL.split('/')[0] + '.firebaseio.com/' + URL.split('/', 1)[1] + '.json'
+                URL.split('/')[0] + '.firebaseio.com/' + URL.split('/', 1)[1]
         else:
             URL = 'https://' + URL + '.firebaseio.com/.json'
-        return URL
 
     if 'http://' in URL:
         URL = URL.replace('http://', 'https://')
@@ -86,9 +87,9 @@ def firebaseURL(URL):
 
 class subscriber:
 
-    def __init__(self, URL, function):
+    def __init__(self, URL, function, me=None, other=None):
         self.cache = {}
-        self.remote_thread = RemoteThread(self, firebaseURL(URL), function)
+        self.remote_thread = RemoteThread(self, firebaseURL(URL), function, me, other)
 
     def start(self):
         self.remote_thread.start()
@@ -126,9 +127,15 @@ def get(URL):
     return json.loads(response.text)
 
 
-# Yuck, I don't want to write documentation for this :p
-#def push(URL, msg):
-#    to_post = json.dumps(msg)
-#    response = requests.post(firebaseURL(URL), data=to_post)
-#    if response.status_code != 200:
-#        raise Exception(response.text)
+def post(URL, msg):
+    to_post = json.dumps(msg)
+    response = requests.post(firebaseURL(URL), data=to_post)
+    if response.status_code != 200:
+        raise Exception(response.text)
+    return json.loads(response.text)
+
+
+def delete(URL):
+    response = requests.delete(firebaseURL(URL))
+    if response.status_code != 200:
+        raise FirebaseException(response.text)
