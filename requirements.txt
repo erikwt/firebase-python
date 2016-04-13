@@ -1,2 +1,3 @@
 requests
 sseclient
+firebase-token-generator

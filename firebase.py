@@ -7,6 +7,8 @@ from Queue import Queue
 import json
 import threading
 import socket
+import re
+from firebase_token_generator import create_token
 
 
 class ClosableSSEClient(SSEClient):
@@ -139,3 +141,47 @@ def delete(URL):
     response = requests.delete(firebaseURL(URL))
     if response.status_code != 200:
         raise FirebaseException(response.text)
+
+
+class FirebaseAuthentication():
+    """ Firebase Interface """
+    def __init__(self, fire_base_url, fire_base_secret):
+        if not fire_base_url.endswith('/'):
+            url = ''.join([fire_base_url, '/'])
+        else:
+            url = fire_base_url
+        # find db name between http:// and .firebaseio.com
+        db_name = re.search('https://(.*).firebaseio.com', fire_base_url)
+        if db_name:
+            name = db_name.group(1)
+        else:
+            db_name = re.search('(.*).firebaseio.com', fire_base_url)
+            name = db_name.group(1)
+        auth_payload = {"uid": "1"}
+        options = {"admin": True}
+
+        self.token = create_token(fire_base_secret, auth_payload, options)
+        self.requests = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(max_retries=3)
+        for scheme in ('http://', 'https://'):
+            self.requests.mount(scheme, adapter)
+        self.fire_base_url = url
+        self.fire_base_name = name
+        self.secret = fire_base_secret
+        self.path = ""
+        self.build_query = {}
+        self.last_push_time = 0
+        self.last_rand_chars = []
+
+    def authenticate(self, email, password):
+        request_ref = 'https://auth.firebase.com/auth/firebase?firebase={0}&email={1}&password={2}'.\
+            format(self.fire_base_name, email, password)
+        request_object = self.requests.get(request_ref)
+        return request_object.json()
+
+    def create(self, email, password):
+        request_ref = 'https://auth.firebase.com/auth/firebase/create?firebase={0}&email={1}&password={2}'.\
+            format(self.fire_base_name, email, password)
+        request_object = self.requests.get(request_ref)
+        request_object.raise_for_status()
+        return request_object.json()
