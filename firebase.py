@@ -56,10 +56,13 @@ class Stream:
         for msg in self.sse:
             msg_data = json.loads(msg.data)
             # don't return initial data
-            if msg_data['path'] != '/':
-                msg_data["event"] = msg.event
-                messages.append(msg_data)
-                stream_handler(messages)
+            try:
+                if msg_data['path'] != '/':
+                    msg_data["event"] = msg.event
+                    messages.append(msg_data)
+                    stream_handler(messages)
+            except TypeError:
+                    pass
 
     def close(self):
         self.sse.close()
@@ -253,6 +256,13 @@ class FirebaseAuthentication():
         request_ref = '{0}{1}.json?auth={2}'.format(self.fire_base_url, self.path, request_token)
         self.path = ""
         request_object = self.requests.patch(request_ref, data=json.dumps(data))
+        return request_object.json()
+
+    def remove(self, token=None):
+        request_token = check_token(token, self.token)
+        request_ref = '{0}{1}.json?auth={2}'.format(self.fire_base_url, self.path, request_token)
+        self.path = ""
+        request_object = self.requests.delete(request_ref)
         return request_object.json()
 
     def build_request_url(self, token):
